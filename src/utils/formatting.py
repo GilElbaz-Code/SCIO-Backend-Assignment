@@ -1,6 +1,3 @@
-from typing import Any
-
-
 def format_value(value: float, unit: str) -> str:
     """
     Format a numeric value based on unit specification.
