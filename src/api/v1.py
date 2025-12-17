@@ -1,87 +1,50 @@
-"""
-api/v1.py – all v1 endpoints.
-Only transport concerns live here (auth header, HTTP codes, paging).
-Business logic comes from domain.services, persistence from
-infrastructure.repository.  Services are injected via app.state.
-"""
+from datetime import datetime
+from typing import Optional
 
-from typing import Annotated
+from fastapi import APIRouter, Depends, Request
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from fastapi.responses import JSONResponse
+from src.domain.schemas import ReportRowOut
+from src.domain.services import AnalysisService
 
-from src.domain.schemas import ScanOut, ScanIn, ReportOut
-from src.domain.services import ScanService, ReportService
-from src.settings import Settings, get_settings
+router = APIRouter(tags=["Analysis"])
 
-router = APIRouter(tags=["v1"])
 
-# ------------------------------------------------------------------ #
-# helpers – pull services from app.state
-# ------------------------------------------------------------------ #
-def _scan_svc(request: Request) -> ScanService:          # type: ignore
-    return request.app.state.scan_service
+def _get_service(request: Request) -> AnalysisService:
+    """Dependency to get the AnalysisService from app state."""
+    return request.app.state.analysis_service
 
-def _report_svc(request: Request) -> ReportService:      # type: ignore
-    return request.app.state.report_service
 
-# ------------------------------------------------------------------ #
-# edge-layer guard – API-key header
-# ------------------------------------------------------------------ #
-async def _require_key(
-    x_api_key: Annotated[str, Header(alias="X-API-KEY")] = "",
-    cfg: Settings = Depends(get_settings),
-) -> None:
-    if x_api_key != cfg.api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
+@router.get("/reports", response_model=list[ReportRowOut])
+async def get_reports(
+        user_id: Optional[str] = None,
+        device_id: Optional[str] = None,
+        from_date: Optional[datetime] = None,
+        to_date: Optional[datetime] = None,
+        svc: AnalysisService = Depends(_get_service),
+) -> list[ReportRowOut]:
+    """
+    Get Scan Analysis Reports filtered by user, device, or date range.
+
+    Query Parameters:
+        - user_id: Filter by user ID
+        - device_id: Filter by device ID
+        - from_date: Filter scans from this datetime (inclusive)
+        - to_date: Filter scans until this datetime (inclusive)
+
+    Returns:
+        List of scan report rows with formatted results
+    """
+    data = svc.get_scan_report(user_id, device_id, from_date, to_date)
+
+    # Map domain model to API schema
+    return [
+        ReportRowOut(
+            sampled_at=row.sampled_at,
+            user_id=row.user_id,
+            device_id=row.device_id,
+            widget_name=row.widget_name,
+            algo_name=row.algo_name,
+            results=row.formatted_results,
         )
-
-# ------------------------------------------------------------------ #
-# routes
-# ------------------------------------------------------------------ #
-@router.post(
-    "/scans",
-    dependencies=[Depends(_require_key)],
-    response_model=ScanOut,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_scan(payload: ScanIn, svc: ScanService = Depends(_scan_svc)):
-    return svc.create_scan(content=payload.content, score=payload.score)
-
-
-@router.get(
-    "/scans",
-    dependencies=[Depends(_require_key)],
-    response_model=list[ScanOut],
-)
-async def list_scans(
-    skip: int = 0,
-    limit: int = 50,
-    svc: ScanService = Depends(_scan_svc),
-):
-    return svc.list_scans(skip=skip, limit=limit)
-
-
-@router.delete(
-    "/scans/{scan_id}",
-    dependencies=[Depends(_require_key)],
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def delete_scan(scan_id: int, svc: ScanService = Depends(_scan_svc)):
-    svc.delete_scan(scan_id)
-    return JSONResponse(status_code=status.HTTP_204_NO_CONTENT)
-
-
-@router.post(
-    "/reports",
-    dependencies=[Depends(_require_key)],
-    response_model=ReportOut,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_report(
-    title: str,
-    owner: str,
-    svc: ReportService = Depends(_report_svc),
-):
-    return svc.create_report(title=title, owner=owner)
+        for row in data
+    ]

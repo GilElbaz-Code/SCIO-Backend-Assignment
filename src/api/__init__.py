@@ -1,8 +1,6 @@
 """
-api/__init__.py
-Package entry-point: creates the FastAPI app, wires up lifespan
+API package: creates the FastAPI app, wires up lifespan
 initialisation, and mounts the v1 router.
-The project layout is flat:  api/, domain/, infrastructure/, settings.py
 """
 
 from contextlib import asynccontextmanager
@@ -10,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from src.api.v1 import router
-from src.domain.services import ScanService, ReportService
+from src.domain.services import AnalysisService
 from src.infrastructure.repository import Database
 from src.settings import get_settings
 
@@ -20,11 +18,10 @@ _cfg = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialise DB + services once; tear down gracefully on shutdown."""
-    db = Database(_cfg.excel_path)
-    app.state.scan_service = ScanService(db)
-    app.state.report_service = ReportService(db)
-    yield                                  # ----  application runs  ----
-    # here you’d close db pools, flush telemetry, etc.
+    db = Database(_cfg)
+    app.state.analysis_service = AnalysisService(db)
+    yield  # ---- application runs ----
+    # Cleanup: close db pools, flush telemetry, etc.
 
 
 app = FastAPI(
@@ -34,6 +31,6 @@ app = FastAPI(
     openapi_url=f"{_cfg.api_v1_prefix}/openapi.json",
 )
 
-app.include_router(router, prefix=_cfg.api_v1_prefix)   # /api/v1/…
+app.include_router(router, prefix=_cfg.api_v1_prefix)  # /api/v1/...
 
 __all__ = ["app"]

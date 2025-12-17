@@ -1,24 +1,14 @@
 from datetime import datetime
-from decimal import Decimal
-
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
-class ScanIn(BaseModel):
-    content: str = Field(..., min_length=1, max_length=4096)
-    score: Decimal = Field(..., ge=0, le=1)
-
-
-class ScanOut(ScanIn):
-    id: int
-    created_at: datetime
-
-
-class ReportOut(BaseModel):
-    id: int
-    title: str
-    owner: str
-    created_at: datetime
-    scans: list[ScanOut]
+class ReportRowOut(BaseModel):
+    """API response schema for scan analysis report rows."""
+    sampled_at: datetime
+    user_id: str
+    device_id: str
+    widget_name: str
+    algo_name: str
+    results: str  # Mapped from 'formatted_results' in domain model
 
     model_config = ConfigDict(from_attributes=True)

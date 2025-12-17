@@ -1,25 +1,40 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    """Centralised, dotenv-friendly configuration."""
+    """Centralised configuration."""
 
     app_name: str = "SCiO Backend Exercise"
     api_v1_prefix: str = "/api/v1"
     api_key: str = Field(
-        "changeme",
-        description="Simple shared secret for X-API-KEY header "
-                    "(obviously replace with real auth in prod).",
+        default="changeme",
+        description="Simple shared secret for X-API-KEY header.",
     )
-    # Excel persistence (demo only)
-    excel_path: str = "data/source.xlsx"
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    # Data paths (Assumes files are in a 'data' folder relative to run dir)
+    data_dir: Path = Path("data")
+
+    @property
+    def widget_data_path(self) -> Path:
+        return self.data_dir / "Widget_data.xlsx"
+
+    @property
+    def algo_data_path(self) -> Path:
+        return self.data_dir / "Algo_data.xlsx"
+
+    @property
+    def scan_data_path(self) -> Path:
+        return self.data_dir / "Scan_data.xlsx"
+
+    @property
+    def scan_results_path(self) -> Path:
+        return self.data_dir / "Scan_Results_data.xlsx"
+
+    model_config = {"env_file": ".env"}
 
 
 @lru_cache

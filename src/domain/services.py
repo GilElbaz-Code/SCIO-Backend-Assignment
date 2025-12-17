@@ -1,29 +1,132 @@
-from collections.abc import Iterable
+from typing import Iterable, Optional, TYPE_CHECKING
 from datetime import datetime
-from decimal import Decimal
 
-from src.domain.models import Scan, Report
-from src.infrastructure.repository import Database
+from src.domain.models import ScanReportRow
+
+if TYPE_CHECKING:
+    from src.infrastructure.repository import Database
 
 
-class ScanService:
-    def __init__(self, db: Database) -> None:
+class AnalysisService:
+    """
+    Business logic for scan analysis operations.
+    Handles report generation with proper formatting based on widget configuration.
+    """
+
+    def __init__(self, db: "Database") -> None:
         self._db = db
 
-    # ---------------- public API ---------------- #
-    def create_scan(self, *, content: str, score: Decimal) -> Scan:
-        return self._db.create_scan(content=content, score=score, dt=datetime.utcnow())
+    def get_scan_report(
+            self,
+            user_id: Optional[str] = None,
+            device_id: Optional[str] = None,
+            from_date: Optional[datetime] = None,
+            to_date: Optional[datetime] = None,
+    ) -> Iterable[ScanReportRow]:
+        """
+        Generate scan analysis report filtered by criteria.
 
-    def list_scans(self, *, skip: int, limit: int) -> Iterable[Scan]:
-        return self._db.list_scans(skip=skip, limit=limit)
+        Args:
+            user_id: Filter by user ID
+            device_id: Filter by device ID
+            from_date: Filter scans from this date (inclusive)
+            to_date: Filter scans until this date (inclusive)
 
-    def delete_scan(self, scan_id: int) -> None:
-        self._db.delete_scan(scan_id)
+        Returns:
+            Iterable of ScanReportRow with formatted results
+        """
+        scans = self._db.list_scans(user_id, device_id, from_date, to_date)
+        report = []
 
+        for scan in scans:
+            widget = self._db.get_widget(scan.widget_id)
+            algo = self._db.get_algo(scan.algo_id)
 
-class ReportService:
-    def __init__(self, db: Database) -> None:
-        self._db = db
+            if not widget or not algo:
+                continue
 
-    def create_report(self, title: str, owner: str) -> Report:
-        return self._db.create_report(title=title, owner=owner)
+            formatted_results = self._format_scan_results(
+                scan.results,
+                widget.param_config,
+                widget.param_order,
+            )
+
+            report.append(
+                ScanReportRow(
+                    sampled_at=scan.sampled_at,
+                    user_id=scan.user_id,
+                    device_id=scan.device_id,
+                    widget_name=widget.name,
+                    algo_name=algo.name,
+                    formatted_results=formatted_results,
+                )
+            )
+
+        return report
+
+    def _format_scan_results(
+            self,
+            results: list,
+            param_config: dict[str, dict[str, str]],
+            param_order: list[str] = None,
+    ) -> str:
+        """
+        Format scan results based on widget parameter configuration.
+
+        Args:
+            results: List of ScanResult objects
+            param_config: Widget parameter display configuration
+            param_order: Optional ordering of parameters for display
+
+        Returns:
+            Formatted string like "{Protein: 12.50, Moisture: 22.1 %}"
+        """
+        # Create a lookup dict for results by parameter name
+        results_by_name = {r.parameter_name: r for r in results}
+
+        # Determine the order of parameters
+        if param_order:
+            # Use specified order, then append any not in the order
+            ordered_names = list(param_order)
+            for r in results:
+                if r.parameter_name not in ordered_names:
+                    ordered_names.append(r.parameter_name)
+        else:
+            # Use the order they appear in results
+            ordered_names = [r.parameter_name for r in results]
+
+        formatted_parts = []
+        for param_name in ordered_names:
+            res = results_by_name.get(param_name)
+            if not res:
+                continue
+
+            conf = param_config.get(res.parameter_name, {})
+            display_name = conf.get("display_name", res.parameter_name)
+            unit = conf.get("unit", "")
+
+            val_str = self._format_value(res.predicted_value, unit)
+            formatted_parts.append(f"{display_name}: {val_str}")
+
+        return "{" + ", ".join(formatted_parts) + "}"
+
+    @staticmethod
+    def _format_value(value: float, unit: str) -> str:
+        """
+        Format a numeric value based on unit specification.
+
+        Args:
+            value: The numeric value to format
+            unit: Unit specification ('float_2_dig', 'float_1_dig', '%', or empty)
+
+        Returns:
+            Formatted value string
+        """
+        if unit == "float_2_dig":
+            return f"{value:.2f}"
+        elif unit == "float_1_dig":
+            return f"{value:.1f}"
+        elif unit == "%":
+            return f"{value} %"
+        else:
+            return str(value)
