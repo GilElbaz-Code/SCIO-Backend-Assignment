@@ -132,6 +132,17 @@ class TestGetScanReportBasic:
 
         assert reports[0].algo_name == "Wheat Protein Algo"
 
+    def test_report_contains_sampled_at(self, service: AnalysisService):
+        """Verify sampled_at timestamp is preserved."""
+        reports = list(service.get_scan_report())
+        assert all(r.sampled_at is not None for r in reports)
+        assert isinstance(reports[0].sampled_at, datetime)
+
+    def test_report_contains_user_and_device_ids(self, service: AnalysisService):
+        """Verify user_id and device_id are included in report."""
+        reports = list(service.get_scan_report())
+        assert all(r.user_id is not None and r.device_id is not None for r in reports)
+
 
 # ---------------------------------------------------------------------------
 # Test: get_scan_report - Filtering
@@ -200,12 +211,25 @@ class TestGetScanReportFiltering:
 
         assert reports == []
 
+    def test_filter_returns_empty_for_nonexistent_device(self, service: AnalysisService):
+        """Verify filtering by non-existent device returns empty list."""
+        reports = list(service.get_scan_report(device_id="nonexistent"))
+
+        assert reports == []
+
+    def test_filter_by_future_date_returns_empty(self, service: AnalysisService):
+        """Verify filtering by future date returns empty list."""
+        future_date = datetime(2099, 1, 1, 0, 0, 0)
+        reports = list(service.get_scan_report(from_date=future_date))
+
+        assert reports == []
+
 
 # ---------------------------------------------------------------------------
-# Test: Result Formatting
+# Test: Value Formatting
 # ---------------------------------------------------------------------------
 
-class TestResultFormatting:
+class TestValueFormatting:
     """Tests for result value formatting based on unit configuration."""
 
     def test_format_value_percentage(self):
@@ -233,6 +257,29 @@ class TestResultFormatting:
         result = AnalysisService._format_value(value=123.456, unit="unknown")
         assert result == "123.456"
 
+    def test_format_value_integer(self):
+        """Verify integer values are formatted correctly."""
+        result = AnalysisService._format_value(value=100.0, unit="float_2_dig")
+        assert result == "100.00"
+
+    def test_format_value_negative_number(self):
+        """Verify negative values are formatted correctly."""
+        result = AnalysisService._format_value(value=-5.678, unit="float_2_dig")
+        assert result == "-5.68"
+
+    def test_format_value_zero(self):
+        """Verify zero is formatted correctly."""
+        result = AnalysisService._format_value(value=0.0, unit="%")
+        assert result == "0.0 %"
+
+
+# ---------------------------------------------------------------------------
+# Test: Result Formatting String
+# ---------------------------------------------------------------------------
+
+class TestResultFormattingString:
+    """Tests for formatted results string generation."""
+
     def test_formatted_results_string_structure(self, service: AnalysisService):
         """Verify the formatted results string has correct structure."""
         reports = list(service.get_scan_report(user_id="user_001"))
@@ -258,6 +305,32 @@ class TestResultFormatting:
 
         # Corn Scanner uses float_2_dig for protein (8.234 -> 8.23)
         assert "8.23" in reports[0].formatted_results
+
+    def test_formatted_results_with_float_1_dig_unit(self, service: AnalysisService):
+        """Verify float_1_dig values are formatted correctly."""
+        reports = list(service.get_scan_report(user_id="user_002"))
+
+        # Wheat Scanner uses float_1_dig for starch (68.73 -> 68.7)
+        assert "68.7" in reports[0].formatted_results
+
+    def test_param_order_is_respected(self, service: AnalysisService):
+        """Verify parameters are displayed in the order specified by param_order."""
+        reports = list(service.get_scan_report(user_id="user_001"))
+        # Corn Scanner has param_order=["moisture", "protein"]
+        first_result = reports[0].formatted_results
+
+        moisture_pos = first_result.find("Moisture")
+        protein_pos = first_result.find("Protein")
+        assert moisture_pos < protein_pos, f"Expected Moisture before Protein in {first_result}"
+
+    def test_display_name_is_used_not_parameter_name(self, service: AnalysisService):
+        """Verify display names from widget config are used."""
+        reports = list(service.get_scan_report(user_id="user_001"))
+        results_str = reports[0].formatted_results
+
+        # Should use "Moisture" not "moisture"
+        assert "Moisture:" in results_str
+        assert "moisture:" not in results_str
 
 
 # ---------------------------------------------------------------------------
@@ -340,22 +413,16 @@ class TestEdgeCases:
 
         assert "unknown_param:" in reports[0].formatted_results
 
-    def test_param_order_is_respected(self, populated_db: Database):
-        """Verify parameters are displayed in the order specified by param_order."""
-        # Corn Scanner has param_order=["moisture", "protein"]
-        reports = list(populated_db._scans.values())
-        svc = AnalysisService(db=populated_db)
+    def test_multiple_scans_same_user_device(self, service: AnalysisService):
+        """Verify multiple scans for same user/device are all returned."""
+        reports = list(service.get_scan_report(user_id="user_001", device_id="device_A"))
 
-        reports = list(svc.get_scan_report(user_id="user_001"))
-        # First result should have Moisture before Protein
-        first_result = reports[0].formatted_results
-        moisture_pos = first_result.find("Moisture")
-        protein_pos = first_result.find("Protein")
-        assert moisture_pos < protein_pos, f"Expected Moisture before Protein in {first_result}"
+        assert len(reports) == 2
+        assert all(r.user_id == "user_001" and r.device_id == "device_A" for r in reports)
 
 
 # ---------------------------------------------------------------------------
-# Test: Integration with Repository
+# Test: Repository Integration
 # ---------------------------------------------------------------------------
 
 class TestRepositoryIntegration:
@@ -376,3 +443,22 @@ class TestRepositoryIntegration:
 
         assert len(reports) == 2
         assert all(r.user_id == "user_001" and r.device_id == "device_A" for r in reports)
+
+    def test_correct_scan_count_with_multiple_widgets(self, service: AnalysisService):
+        """Verify service handles multiple different widgets correctly."""
+        reports = list(service.get_scan_report())
+
+        widget_names = {r.widget_name for r in reports}
+        assert len(widget_names) == 2  # Both Corn and Wheat scanners
+        assert "Corn Scanner" in widget_names
+        assert "Wheat Scanner" in widget_names
+
+    def test_correct_algo_names_resolved(self, service: AnalysisService):
+        """Verify different algos are correctly resolved."""
+        reports = list(service.get_scan_report())
+
+        algo_names = {r.algo_name for r in reports}
+        assert len(algo_names) == 2
+        assert "Corn Moisture Algo" in algo_names
+        assert "Wheat Protein Algo" in algo_names
+

@@ -106,7 +106,21 @@ class AnalysisService:
             display_name = conf.get("display_name", res.parameter_name)
             unit = conf.get("unit", "")
 
-            val_str = _formatting.format_value(value=res.predicted_value, unit=unit)
+            val_str = self._format_value(value=res.predicted_value, unit=unit)
             formatted_parts.append(f"{display_name}: {val_str}")
 
         return "{" + ", ".join(formatted_parts) + "}"
+
+    @staticmethod
+    def _format_value(value: float, unit: str) -> str:
+        """
+        Format a numeric value based on unit specification.
+
+        Args:
+            value: The numeric value to format
+            unit: Unit specification ('float_2_dig', 'float_1_dig', '%', or empty)
+
+        Returns:
+            Formatted value string
+        """
+        return _formatting.format_value(value=value, unit=unit)
