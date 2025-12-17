@@ -2,6 +2,9 @@ from typing import Iterable, Optional, TYPE_CHECKING
 from datetime import datetime
 
 from src.domain.models import ScanReportRow
+import src.utils.formatting as _formatting
+from src.domain.models import Algo, Widget, Scan, ScanResult
+from src.domain.schemas import ScanIn
 
 if TYPE_CHECKING:
     from src.infrastructure.repository import Database
@@ -35,20 +38,20 @@ class AnalysisService:
         Returns:
             Iterable of ScanReportRow with formatted results
         """
-        scans = self._db.list_scans(user_id, device_id, from_date, to_date)
+        scans = self._db.list_scans(user_id=user_id, device_id=device_id, from_date=from_date, to_date=to_date)
         report = []
 
         for scan in scans:
-            widget = self._db.get_widget(scan.widget_id)
-            algo = self._db.get_algo(scan.algo_id)
+            widget = self._db.get_widget(widget_id=scan.widget_id)
+            algo = self._db.get_algo(algo_id=scan.algo_id)
 
             if not widget or not algo:
                 continue
 
             formatted_results = self._format_scan_results(
-                scan.results,
-                widget.param_config,
-                widget.param_order,
+                results=scan.results,
+                param_config=widget.param_config,
+                param_order=widget.param_order,
             )
 
             report.append(
@@ -105,7 +108,7 @@ class AnalysisService:
             display_name = conf.get("display_name", res.parameter_name)
             unit = conf.get("unit", "")
 
-            val_str = self._format_value(res.predicted_value, unit)
+            val_str = self._format_value(value=res.predicted_value, unit=unit)
             formatted_parts.append(f"{display_name}: {val_str}")
 
         return "{" + ", ".join(formatted_parts) + "}"
@@ -122,11 +125,40 @@ class AnalysisService:
         Returns:
             Formatted value string
         """
-        if unit == "float_2_dig":
-            return f"{value:.2f}"
-        elif unit == "float_1_dig":
-            return f"{value:.1f}"
-        elif unit == "%":
-            return f"{value} %"
-        else:
-            return str(value)
+        # Delegate to shared util so formatting logic is centralized.
+        return _formatting.format_value(value=value, unit=unit)
+
+    # ---------------------------------------------------------------
+    # Convenience repository-facing methods for the API
+    # ---------------------------------------------------------------
+    def list_algos(self) -> list[Algo]:
+        """Return all algorithms."""
+        return list(self._db._algos.values())
+
+    def list_widgets(self) -> list[Widget]:
+        """Return all widgets."""
+        return list(self._db._widgets.values())
+
+    def list_scans(self, user_id: Optional[str] = None, device_id: Optional[str] = None,
+                   from_date: Optional[datetime] = None, to_date: Optional[datetime] = None) -> list[Scan]:
+        """Return scans (delegates to repository)."""
+        return list(self._db.list_scans(user_id=user_id, device_id=device_id, from_date=from_date, to_date=to_date))
+
+    def add_scan_from_schema(self, scan_in: ScanIn) -> Scan:
+        """Create a domain Scan from a ScanIn schema and store it in the DB."""
+        # Convert ScanIn -> domain Scan
+        results = [
+            ScanResult(parameter_name=r.parameter_name, predicted_value=r.predicted_value)
+            for r in scan_in.results
+        ]
+        scan = Scan(
+            id=scan_in.id,
+            user_id=scan_in.user_id,
+            device_id=scan_in.device_id,
+            widget_id=scan_in.widget_id,
+            algo_id=scan_in.algo_id,
+            sampled_at=scan_in.sampled_at,
+            results=results,
+        )
+        self._db.add_scan(scan)
+        return scan

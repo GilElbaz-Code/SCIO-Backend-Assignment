@@ -19,7 +19,7 @@ _cfg = get_settings()
 async def lifespan(app: FastAPI):
     """Initialise DB + services once; tear down gracefully on shutdown."""
     db = Database(_cfg)
-    app.state.analysis_service = AnalysisService(db)
+    app.state.analysis_service = AnalysisService(db=db)
     yield  # ---- application runs ----
     # Cleanup: close db pools, flush telemetry, etc.
 

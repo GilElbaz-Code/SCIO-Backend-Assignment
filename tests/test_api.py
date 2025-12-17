@@ -43,7 +43,7 @@ def test_db() -> Database:
 @pytest.fixture
 def client(test_db: Database) -> TestClient:
     """Create test client with injected test database."""
-    app.state.analysis_service = AnalysisService(test_db)
+    app.state.analysis_service = AnalysisService(db=test_db)
     return TestClient(app)
 
 

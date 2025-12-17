@@ -96,7 +96,7 @@ def populated_db() -> Database:
 @pytest.fixture
 def service(populated_db: Database) -> AnalysisService:
     """Create an AnalysisService with populated test data."""
-    return AnalysisService(populated_db)
+    return AnalysisService(db=populated_db)
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +115,7 @@ class TestGetScanReportBasic:
 
     def test_empty_database_returns_empty_list(self, empty_db: Database):
         """Verify empty database returns empty report."""
-        svc = AnalysisService(empty_db)
+        svc = AnalysisService(db=empty_db)
         reports = list(svc.get_scan_report())
 
         assert reports == []
@@ -210,27 +210,27 @@ class TestResultFormatting:
 
     def test_format_value_percentage(self):
         """Verify percentage formatting."""
-        result = AnalysisService._format_value(14.5, "%")
+        result = AnalysisService._format_value(value=14.5, unit="%")
         assert result == "14.5 %"
 
     def test_format_value_float_2_dig(self):
         """Verify 2 decimal places formatting."""
-        result = AnalysisService._format_value(8.234, "float_2_dig")
+        result = AnalysisService._format_value(value=8.234, unit="float_2_dig")
         assert result == "8.23"
 
     def test_format_value_float_1_dig(self):
         """Verify 1 decimal place formatting."""
-        result = AnalysisService._format_value(68.73, "float_1_dig")
+        result = AnalysisService._format_value(value=68.73, unit="float_1_dig")
         assert result == "68.7"
 
     def test_format_value_no_unit(self):
         """Verify formatting with no unit specified."""
-        result = AnalysisService._format_value(42.0, "")
+        result = AnalysisService._format_value(value=42.0, unit="")
         assert result == "42.0"
 
     def test_format_value_unknown_unit(self):
         """Verify formatting with unknown unit falls back to string."""
-        result = AnalysisService._format_value(123.456, "unknown")
+        result = AnalysisService._format_value(value=123.456, unit="unknown")
         assert result == "123.456"
 
     def test_formatted_results_string_structure(self, service: AnalysisService):
@@ -280,7 +280,7 @@ class TestEdgeCases:
             results=[]
         ))
 
-        svc = AnalysisService(populated_db)
+        svc = AnalysisService(db=populated_db)
         reports = list(svc.get_scan_report(user_id="user_003"))
 
         assert len(reports) == 0
@@ -298,7 +298,7 @@ class TestEdgeCases:
             results=[]
         ))
 
-        svc = AnalysisService(populated_db)
+        svc = AnalysisService(db=populated_db)
         reports = list(svc.get_scan_report(user_id="user_003"))
 
         assert len(reports) == 0
@@ -315,7 +315,7 @@ class TestEdgeCases:
             results=[]  # Empty results
         ))
 
-        svc = AnalysisService(populated_db)
+        svc = AnalysisService(db=populated_db)
         reports = list(svc.get_scan_report(user_id="user_003"))
 
         assert len(reports) == 1
@@ -335,7 +335,7 @@ class TestEdgeCases:
             ]
         ))
 
-        svc = AnalysisService(populated_db)
+        svc = AnalysisService(db=populated_db)
         reports = list(svc.get_scan_report(user_id="user_003"))
 
         assert "unknown_param:" in reports[0].formatted_results
@@ -344,7 +344,7 @@ class TestEdgeCases:
         """Verify parameters are displayed in the order specified by param_order."""
         # Corn Scanner has param_order=["moisture", "protein"]
         reports = list(populated_db._scans.values())
-        svc = AnalysisService(populated_db)
+        svc = AnalysisService(db=populated_db)
 
         reports = list(svc.get_scan_report(user_id="user_001"))
         # First result should have Moisture before Protein
@@ -363,7 +363,7 @@ class TestRepositoryIntegration:
 
     def test_service_delegates_filtering_to_repository(self, populated_db: Database):
         """Verify service correctly passes filters to repository."""
-        svc = AnalysisService(populated_db)
+        svc = AnalysisService(db=populated_db)
 
         # This implicitly tests that the service correctly passes
         # all filter parameters to the repository

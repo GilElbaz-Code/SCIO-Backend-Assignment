@@ -20,19 +20,19 @@ class Settings(BaseSettings):
 
     @property
     def widget_data_path(self) -> Path:
-        return self.data_dir / "Widget_data.xlsx"
+        return self.data_dir / "Widget data.xlsx"
 
     @property
     def algo_data_path(self) -> Path:
-        return self.data_dir / "Algo_data.xlsx"
+        return self.data_dir / "Algo data.xlsx"
 
     @property
     def scan_data_path(self) -> Path:
-        return self.data_dir / "Scan_data.xlsx"
+        return self.data_dir / "Scan data.xlsx"
 
     @property
     def scan_results_path(self) -> Path:
-        return self.data_dir / "Scan_Results_data.xlsx"
+        return self.data_dir / "Scan Results data.xlsx"
 
     model_config = {"env_file": ".env"}
 
