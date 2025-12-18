@@ -23,7 +23,7 @@ class AnalysisService:
             device_id: Optional[str] = None,
             from_date: Optional[datetime] = None,
             to_date: Optional[datetime] = None,
-    ) -> Iterable[ScanReportRow]:
+    ) -> list[ScanReportRow]:
         """
         Generate scan analysis report filtered by criteria.
 

@@ -1,3 +1,6 @@
+"""Value formatting utilities for scan results display."""
+
+
 def format_value(value: float, unit: str) -> str:
     """
     Format a numeric value based on unit specification.
@@ -9,12 +12,12 @@ def format_value(value: float, unit: str) -> str:
     Returns:
         Formatted value string
     """
-    if unit == "float_2_dig":
-        return f"{value:.2f}"
-    elif unit == "float_1_dig":
-        return f"{value:.1f}"
-    elif unit == "%":
-        return f"{value} %"
-    else:
-        return str(value)
-
+    match unit:
+        case "float_2_dig":
+            return f"({value:.2f})"
+        case "float_1_dig":
+            return f"{value:.1f}"
+        case "%":
+            return f"{value:.1f} %"
+        case _:
+            return str(value)
