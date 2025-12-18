@@ -1,21 +1,16 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    """Centralised configuration."""
+    """Centralised, env-driven configuration."""
 
     app_name: str = "SCiO Backend Exercise"
     api_v1_prefix: str = "/api/v1"
-    api_key: str = Field(
-        default="changeme",
-        description="Simple shared secret for X-API-KEY header.",
-    )
 
-    # Data paths (Assumes files are in a 'data' folder relative to run dir)
+    # Data paths (assumes files live under ./data)
     data_dir: Path = Path("data")
 
     @property
@@ -39,4 +34,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    """Return a cached Settings instance so the app only parses env once."""
     return Settings()
