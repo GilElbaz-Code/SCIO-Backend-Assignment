@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Iterable, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 import src.utils.formatting as _formatting
 from src.domain.models import ScanReportRow
